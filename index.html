@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>vup圈子划分查询</title>
+    <style>
+        .search-wrapper {
+            max-width: 600px;
+            margin: 20px auto;
+            text-align: center;
+        }
+
+        .search-input {
+            padding: 12px 20px;
+            width: 20em;
+            border: 2px solid #72d0fb;
+            border-radius: 5px;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .search-input:focus {
+            box-shadow: 0 0 5px rgba(204, 216, 243, 0.5);
+        }
+
+        .search-button {
+            margin: 1em;
+            padding: 12px 30px;
+            background-color: #72d0fb;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .search-button:hover {
+            background-color: #72d0fb;
+            transform: translateY(-2px);
+        }
+
+        .result-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 新增样式 */
+        .result-item {
+            padding: 7px;
+            margin-bottom: 7px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #72d0fb;
+            border-radius: 4px;
+            word-break: break-all;
+            line-height: 1.6;
+            transition: all 0.3s ease;
+        }
+
+        .result-item:hover {
+            background-color: #d0eefc;
+            transform: translateX(5px);
+        }
+
+        .result-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* 如果没有结果时的样式 */
+        .no-result {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-size: 16px;
+        }
+        .page-title {
+            text-align: center;
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+        .description-box {
+            max-width: 800px;
+            margin: 2px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .tooltip {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/pako/dist/pako.min.js"></script> -->
+    <script>
+        let cluster_id_to_data;
+        let cluster_id_history;
+        let selected_vup_info;
+        let mid_to_index = {};
+        let owner_id_history;
+        let vup_name_list=[];
+        function format_cluster(cluster) {
+            return cluster.map(point => {
+                return selected_vup_info[point]["uname"]
+            }).join(" ");
+        }
+        async function fetchData() {
+            if (cluster_id_history !== undefined && cluster_id_to_data !== undefined) {
+                return
+            }
+            try {
+                // const history_response = await fetch("cluster_id_history.json.gz");
+                const history_response = await fetch("cluster_id_history.json");
+                if (!history_response.ok) {
+                    throw new Error(`history json HTTP error! status: ${history_response.status}`);
+                }
+                // let dataBuffer = await history_response.arrayBuffer();
+                // let compressed = new Uint8Array(dataBuffer);
+                // let decompressed = pako.inflate(compressed);
+                // let text = new TextDecoder().decode(decompressed);
+                let text = await history_response.text();
+                cluster_id_history = JSON.parse(text);
+
+                const id_response = await fetch("cluster_id_to_data.json");
+                if (!id_response.ok) {
+                    throw new Error(`ID json HTTP error! status: ${id_response.status}`);
+                }
+                text = await id_response.text();
+                cluster_id_to_data = JSON.parse(text);
+
+                selected_vup_info = JSON.parse(await (await fetch("selected_vup_info.json")).text());
+                for (let index = 0; index < selected_vup_info.length; index++) {
+                    const v = selected_vup_info[index];
+                    mid_to_index[v["mid"]] = index;
+                }
+
+                owner_id_history = new Array(cluster_id_history.length);
+                for (let m = 0; m < cluster_id_history.length; m++) {
+                    owner_id_history[m] = new Array(selected_vup_info.length);
+                    const clusters = cluster_id_history[m];
+                    for (const cid of clusters) {
+                        let cluster = cluster_id_to_data[cid];
+                        for (const point of cluster) {
+                            owner_id_history[m][point] = cid;
+                        }
+                    }
+                }
+
+
+
+            } catch (error) {
+                console.error('Error fetching JSON data:', error);
+            }
+        }
+        function showTooltip() {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.style.display = 'block';
+            
+            // 3秒后自动隐藏
+            setTimeout(() => {
+                tooltip.style.display = 'none';
+            }, 3000);
+        }
+        function setEqual(arr1, arr2) {
+            if (arr1.length !== arr2.length) return false;
+            
+            const set1 = new Set(arr1);
+            return arr2.every(item => set1.has(item));
+        }
+        function queryVUP() {
+            let text = String(document.getElementById("queryText").value).trim();
+            if (text==="") {
+                return;
+            }
+            let mid;
+            if(/^\d+$/.test(text)){
+                mid=parseInt(text);
+            }
+            else{
+                for (const v of selected_vup_info) {
+                    let name = v["uname"];
+                    if(name.search(text)>-1){
+                        mid = v["mid"]
+                    }
+                }
+            }
+            if(mid==undefined){
+                showTooltip();
+                return;
+            }
+            let vIndex = mid_to_index[mid];
+            if(vIndex==undefined){
+                showTooltip();
+                return
+            }
+            let viewHistory = [];
+            viewHistory.push(format_cluster(cluster_id_to_data[owner_id_history[0][vIndex]]));
+            let oldOwner = owner_id_history[0][vIndex];
+            for (let m = 1; m < owner_id_history.length; m++) {
+                const owner = owner_id_history[m][vIndex];
+                if (oldOwner != owner ) {
+                    if (!setEqual(cluster_id_to_data[owner],cluster_id_to_data[oldOwner])) {
+                        viewHistory.push(format_cluster(cluster_id_to_data[owner]));
+                    }
+                    oldOwner = owner;
+                }
+            }
+            const container = document.getElementById('container');
+            container.innerHTML = ''; 
+            viewHistory.forEach(result => {
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'result-item';
+                resultDiv.textContent = result; // 或者使用 innerHTML 如果结果包含HTML
+                container.appendChild(resultDiv);
+            });
+
+        }
+        fetchData().then((r)=>{
+            document.getElementById("queryButton").disabled = false;
+            const input = document.getElementById("queryText");
+            const button = document.getElementById("queryButton");
+
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    button.click();
+                }
+            });
+            input.addEventListener('input', function() {
+                sessionStorage.setItem('savedInput', this.value);
+            });
+            const savedContent = sessionStorage.getItem('savedInput');
+            if (savedContent) {
+                input.value = savedContent;
+            }
+        });
+
+    </script>
+    <h1 class="page-title">vup所属圈子</h1>
+    <div class="search-wrapper">
+        <input type="text" id="queryText" placeholder="请输入B站UP主ID或名字" class="search-input">
+        <div id="tooltip" class="tooltip">无结果</div>
+        <button onclick="queryVUP()" id="queryButton" class="search-button" disabled>
+            查询
+        </button>
+    </div>
+    <div class="description-box">展示了在合并圈子的过程中，vup在合并过程中被划分到哪些圈子中。合并到最大圈子人数不多于36人时为止。<br>
+        只有被vtbs收录的、一万粉丝以上、今年有动态的vup有结果。<br>
+        可以只输入名字的一部分，但需要区分简体繁体、大小写。
+
+    </div>
+    <div id="container" class="result-container"></div>
+</body>
+
+</html>
