@@ -37,6 +37,10 @@
             transition: all 0.3s ease;
         }
 
+        .loading-button {
+            background-color: gainsboro;
+        }
+
         .search-button:hover {
             background-color: #72d0fb;
             transform: translateY(-2px);
@@ -244,6 +248,8 @@
             const input = document.getElementById("queryText");
             const button = document.getElementById("queryButton");
 
+            button.classList.remove("loading-button");
+            button.textContent="查询"
             input.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
                     button.click();
@@ -263,11 +269,12 @@
     <div class="search-wrapper">
         <input type="text" id="queryText" placeholder="请输入B站UP主ID或名字" class="search-input">
         <div id="tooltip" class="tooltip">无结果</div>
-        <button onclick="queryVUP()" id="queryButton" class="search-button" disabled>
-            查询
+        <button onclick="queryVUP()" id="queryButton" class="search-button loading-button" disabled>
+            加载中
         </button>
     </div>
     <div class="description-box">展示了在合并圈子的过程中，vup在合并过程中被划分到哪些圈子中。合并到最大圈子人数不多于36人时为止。<br>
+        需要下载比较多的数据，可能需要等待一小段时间。<br>
         只有被vtbs收录的、一万粉丝以上、今年有动态的vup有结果。<br>
         可以只输入名字的一部分，但需要区分简体繁体、大小写。
 
